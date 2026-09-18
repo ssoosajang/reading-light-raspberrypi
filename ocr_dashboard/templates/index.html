@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>문서 OCR 스튜디오</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"><script defer="" src="{{ url_for('static', filename='app.js') }}"></script><script type="module" src="{{ url_for('static', filename='lighting_ui.mjs') }}"></script><script type="module" src="{{ url_for('static', filename='hue_ui.mjs') }}"></script><script defer="" src="{{ url_for('static', filename='simple_ui.js') }}"></script></head>
+<body data-camera-backend="{{ camera_backend }}"><main class="simple-dashboard"><header class="simple-header"><span class="eyebrow">책에 맞는 빛</span><h1>책을 비추세요.</h1><details class="connection-settings"><summary>설정</summary><div class="connection-controls"><label>조명 종류<select id="lighting-provider"><option value="both" {% if both_saved %}selected{% endif %}>Hue + WiZ 함께</option><option value="hue">Philips Hue</option><option value="wiz" {% if wiz_saved and not both_saved %}selected{% endif %}>WiZ 전구</option></select></label><button id="hue-discover" type="button">브릿지 검색</button><select id="hue-bridge" aria-label="발견한 브릿지"></select><button id="hue-pair" type="button" disabled="">연결 승인 확인</button><button id="hue-verify" type="button" disabled="">연결 검증 · 조명 목록 읽기</button><select id="hue-light" disabled="" aria-label="적용할 조명"></select><button id="hue-auto" type="button" aria-pressed="false" disabled="">OCR 결과로 자동 조명 연동 켜기</button><p id="hue-message" role="status" aria-live="polite">브릿지 검색부터 시작하세요.</p></div></details></header><section class="focus-panel"><p id="session-status" role="status" aria-live="polite">시작을 누르고 책을 비춰 주세요.</p><div class="camera-stage"><div class="camera-placeholder">카메라를 시작하고<br>책 한 페이지를 비춰 주세요.</div><img id="pi-camera-preview" alt="카메라 모듈의 최근 촬영 화면" hidden style="width:100%;height:100%;object-fit:contain"><video id="video" autoplay="" muted="" playsinline="" hidden=""></video></div><button id="session-toggle" class="primary" type="button" aria-pressed="false">시작</button></section><footer>이 기기에서 인식합니다. 중지하거나 다른 탭으로 이동하면 카메라가 꺼집니다.</footer><div hidden="" aria-hidden="true">
+<header><span class="eyebrow">LOCAL DOCUMENT WORKSPACE</span><h1>책을 비추면,<br>조명이 달라집니다.</h1><p>카메라를 켜두세요. 같은 페이지 유형을 두 번 확인하면 조명을 자동 조절합니다.</p><span id="health" class="badge">OCR 엔진 확인 중</span></header>
+<section class="workspace">
+<div class="panel"><h2><span>01</span> 문서 준비</h2><label class="upload" for="file">이미지 선택 <small>JPG · PNG · 최대 16 MB</small><input id="file" type="file" accept="image/jpeg,image/png,image/webp"></label>
+<div class="buttons"><button id="capture" type="button" disabled="">한 번만 촬영</button></div>
+
+<img id="source" alt="선택한 원본 문서" hidden="">
+<div class="settings"><label>인식 언어<select id="language"><option value="kor+eng">한글 + 영문</option><option value="kor">한글</option><option value="eng">영문</option></select></label><label>전처리<select id="mode"><option value="threshold">문자 대비 높이기</option><option value="gray">회색조</option></select></label></div>
+<label class="check"><input id="rectify" type="checkbox"> 문서 자동 감지 및 원근 보정</label><button id="run" class="primary" type="button" disabled="">텍스트 추출</button><p id="status" role="status" aria-live="polite">이미지를 선택해 시작하세요.</p></div>
+<div class="panel"><h2><span>02</span> 추출 결과</h2><label for="result">저장하기 전에 텍스트를 수정할 수 있습니다.</label><textarea id="result" placeholder="추출된 텍스트가 여기에 표시됩니다."></textarea><div class="buttons"><button id="txt" disabled="">TXT 저장</button><button id="json" disabled="">JSON 내보내기</button></div><details><summary>처리 이미지 확인</summary><p id="detection">아직 처리한 이미지가 없습니다.</p><img id="preview" alt="OCR에 사용한 처리 이미지" hidden=""></details></div>
+</section>
+<section class="panel lighting-panel" aria-labelledby="lighting-title">
+  <div class="lighting-heading"><h2 id="lighting-title"><span>03</span> 페이지에 맞는 조명</h2><span class="badge">프로필 미리보기</span></div>
+  <p class="lighting-note">수학은 차가운 흰빛 6500 K, 영어·독서는 흰빛 4500 K, 그림·미술은 따뜻한 흰빛 3000 K입니다. 모든 사람에게 검증된 연구 기반 권장치가 아닙니다. 자동 연동은 기존 밝기를 유지합니다.</p>
+  <div class="lighting-layout">
+    <div>
+      <label for="lighting-activity">페이지 유형 / 활동 선택</label>
+      <select id="lighting-activity"><option value="auto">촬영 페이지로 자동 분류</option><option value="math_book">수학·계산</option><option value="art_book">미술·창작</option><option value="english_book">영어 글 중심</option><option value="text_book">글이 많은 페이지</option><option value="picture_book">그림 중심</option><option value="focus">집중</option><option value="reading">독서</option><option value="relax">휴식</option><option value="general">일반</option></select>
+      <button id="lighting-recommend" type="button">현재 활동으로 추천 새로고침</button>
+      <p id="lighting-reason" class="lighting-note">추천을 준비하고 있습니다.</p>
+      <div id="lighting-preview" class="lighting-preview" role="img" aria-label="조명 설정 미리보기"><div id="lighting-swatch"></div></div>
+      <p id="lighting-summary" class="lighting-note">화면 미리보기는 실제 조명의 색이나 밝기와 다를 수 있습니다.</p>
+    </div>
+    <form id="lighting-form">
+      <fieldset id="lighting-fields" disabled=""><legend>추천값 조정</legend>
+        <div class="settings"><label>조명 모드<select id="lighting-mode"><option value="temperature">색온도</option><option value="color">색상</option></select></label>
+        <label>색상<input id="lighting-color" type="color" value="#ffffff" disabled=""></label></div>
+        <div class="settings"><label>색온도 (K)<input id="lighting-temperature" type="number" min="2000" max="6500" step="1" required=""></label>
+        <label>밝기 (%)<input id="lighting-brightness" type="number" min="0" max="100" step="1" required=""></label></div>
+        <label for="lighting-basis">근거 메모 · 논문명 / DOI / 기준</label><textarea id="lighting-basis" maxlength="1000" placeholder="검증한 근거를 입력하세요. 인증 정보는 입력하지 마세요."></textarea>
+      </fieldset>
+      <div class="buttons"><button id="lighting-save" type="submit" disabled="">이 활동의 프로필 저장</button><button id="lighting-apply" type="button" disabled="">미리보기 상태 확인</button></div>
+      <p id="lighting-status" role="status" aria-live="polite">실제 조명 연결은 비활성 상태입니다.</p>
+      <p id="lighting-save-status" class="lighting-note"></p>
+    </form>
+  </div>
+  <div class="lighting-export"><button id="lighting-export" type="button">저장된 전체 프로필 내보내기</button><p class="lighting-note">설정만 이 Mac에 저장합니다. 내보내기에는 저장 전 수정값과 OCR 원문이 포함되지 않습니다.</p></div>
+</section>
+<section id="hue-hardware" class="panel lighting-panel" aria-labelledby="hue-hardware-title">
+  <div class="lighting-heading"><h2 id="hue-hardware-title"><span>04</span> Hue 하드웨어 연결</h2></div>
+  <p>Hue 라이트스트립 플러스 4세대 2m + Hue 브릿지 · 휴대폰 앱에서 조명 제어를 확인한 다음 연결하세요.</p>
+  <p class="lighting-note">검색과 연결 검증은 조명을 바꾸지 않습니다. 아래에서 조명을 선택하고 적용을 확인할 때 한 번 변경합니다.</p>
+  <div class="buttons"></div>
+  <label for="hue-bridge">발견한 브릿지</label>
+  <div class="buttons"></div>
+  <p class="lighting-note">처음 연결할 때는 브릿지 가운데 버튼을 누른 뒤 연결 승인 확인을 누르세요. 인증정보는 이 Mac에 저장되며 내보내기에 포함되지 않습니다.</p>
+  <label for="hue-light">적용할 조명</label>
+  <div class="buttons"><button id="hue-control" type="button" disabled="">위의 추천값을 실제 조명에 한 번 적용</button></div>
+
+  <div class="buttons"></div>
+
+  <p class="lighting-note">켜면 Hue와 WiZ에 같은 색온도 기준을 적용합니다. 수학·계산 6500 K, 영어·독서 4500 K, 그림·미술 3000 K입니다. 실제 빛의 느낌과 밝기는 기기별로 다를 수 있습니다. 카메라 시작 후 약 2초 간격으로 재분석하고 같은 유형이 두 번 이어질 때 적용합니다. 탭을 숨기거나 중지하면 자동 인식이 멈춥니다. 새로고침해도 연결을 확인한 뒤 자동 연동을 복원합니다. 직접 끄면 꺼진 상태를 기억합니다. 판단이 어려운 사진·같은 설정은 건너뛰고 연결 오류 시 중단합니다. 페이지 유형 / 활동 선택은 ‘촬영 페이지로 자동 분류’으로 두세요.</p>
+</section><footer>이미지는 이 기기에서 처리하며 서버에 보관하지 않습니다. 카메라는 localhost 또는 HTTPS에서 사용할 수 있습니다.</footer>
+<button id="camera" type="button" class="primary">자동 인식 시작</button><button id="stop" type="button" disabled="">자동 인식 중지</button><p id="live-status" class="badge" role="status" aria-live="polite">자동 인식 대기 · 시작 버튼을 누르고 책을 비춰 주세요.</p><p id="page-analysis" role="status">아직 인식한 책이 없습니다.</p><span id="hue-status" class="badge" role="status">브릿지 연결 필요</span><p id="hue-auto-status" role="status">자동 연동 꺼짐</p></div></main>
+
+</body></html>
