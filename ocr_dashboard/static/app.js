@@ -1,6 +1,30 @@
 const $ = id => document.getElementById(id);
 const piCamera = document.body.dataset.cameraBackend === 'picamera';
 let piURL = null;
+let lastCapture = null;
+const tuningIds = ['language','mode','rectify','ocr-psm','ocr-resolution'];
+for (const id of tuningIds) {
+  const control = $(id);
+  if (!control) continue;
+  try {
+    const saved = localStorage.getItem('ocr-tuning-' + id);
+    if (saved !== null) {
+      if (control.type === 'checkbox') control.checked = saved === 'true';
+      else if ([...control.options].some(o => o.value === saved)) control.value = saved;
+    }
+  } catch {}
+  control.addEventListener('change', () => {
+    try { localStorage.setItem('ocr-tuning-' + id, control.type === 'checkbox' ? String(control.checked) : control.value); } catch {}
+    candidate = null; matches = 0;
+    document.dispatchEvent(new Event('ocr-cleared'));
+  });
+}
+if ($('camera-download')) $('camera-download').onclick = () => {
+  if (!lastCapture) return;
+  const url = URL.createObjectURL(lastCapture);
+  const link = document.createElement('a'); link.href = url; link.download = 'camera-original.jpg'; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
 let selected = null, sourceURL = null, stream = null, latest = null, busy = false;
 let live = false, generation = 0, timer = null, requestAbort = null, candidate = null, matches = 0;
 function liveStatus(text) { $('live-status').textContent = text; }
@@ -45,7 +69,8 @@ $('camera').onclick = async () => {
     }
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('이 주소에서는 카메라를 사용할 수 없습니다. localhost에서 열거나 이미지를 업로드해 주세요.');
     const starting = ++generation;
-    const opened = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment', width: {ideal: 1920}, height: {ideal: 1080}}, audio: false});
+    const captureWidth = Number($('ocr-resolution')?.value || 2000);
+    const opened = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment', width: {ideal: captureWidth}, height: {ideal: Math.round(captureWidth * 3 / 4)}}, audio: false});
     if (starting !== generation) { opened.getTracks().forEach(track => track.stop()); return; }
     stream = opened;
     $('video').srcObject = stream; $('video').hidden = false;
@@ -101,7 +126,9 @@ async function runOCR(continuous = false, token = generation) {
   if (!selected || busy) return;
   if (!continuous) { stopCamera(); token = generation; }
   busy = true;
-  ['run', 'file', 'camera', 'mode', 'language', 'rectify', 'txt', 'json'].forEach(id => $(id).disabled = true);
+  lastCapture = selected;
+  if ($('camera-download')) $('camera-download').disabled = false;
+  ['run', 'file', 'camera', 'mode', 'language', 'rectify', 'txt', 'json', 'ocr-psm', 'ocr-resolution'].forEach(id => $(id).disabled = true);
   latest = null; $('result').value = ''; $('preview').hidden = true;
   document.dispatchEvent(new Event('ocr-cleared'));
   $('status').textContent = '문서를 처리하고 있습니다…';
@@ -111,11 +138,16 @@ async function runOCR(continuous = false, token = generation) {
     const form = new FormData(); form.append('image', selected, 'document.jpg');
     form.append('mode', $('mode').value); form.append('language', $('language').value);
     form.append('rectify', String($('rectify').checked));
+    form.append('psm', $('ocr-psm')?.value || '3');
+    form.append('max_dimension', $('ocr-resolution')?.value || '2000');
     requestAbort = new AbortController();
     const response = await fetch('/api/ocr', {method: 'POST', body: form, signal: requestAbort.signal});
     const data = await response.json(); if (!response.ok) throw new Error(data.error || '처리하지 못했습니다.');
     if (token !== generation || (continuous && !live)) return;
-    latest = data; $('result').value = data.text; $('preview').src = data.preview; $('preview').hidden = false;
+    latest = data;
+    if ($('ocr-debug-text')) $('ocr-debug-text').textContent = data.text || '(인식한 글 없음)';
+    if ($('ocr-diagnostics')) $('ocr-diagnostics').textContent = `${data.engine || 'OCR'} · 처리 ${data.width}×${data.height} · ${data.diagnostics?.seconds ?? '?'}초 · 인식 신뢰도 ${data.diagnostics?.mean_confidence ?? '?'} (정확도 보장값 아님)`;
+    $('result').value = data.text; $('preview').src = data.preview; $('preview').hidden = false;
     let stable = true;
     if (continuous) {
       const analysis = data.page_analysis;
@@ -135,7 +167,7 @@ async function runOCR(continuous = false, token = generation) {
     liveStatus('인식 오류로 중지했습니다. 카메라 시작으로 다시 시도하세요.');
   }
   finally {
-    busy = false; ['run', 'file', 'camera', 'mode', 'language', 'rectify'].forEach(id => $(id).disabled = false);
+    busy = false; ['run', 'file', 'camera', 'mode', 'language', 'rectify', 'ocr-psm', 'ocr-resolution'].forEach(id => $(id).disabled = false);
     $('txt').disabled = $('json').disabled = !latest;
     $('camera').disabled = live;
     $('capture').disabled = !live;

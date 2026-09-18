@@ -2,6 +2,7 @@
 import base64
 import io
 import warnings
+import time
 
 import cv2
 import numpy as np
@@ -12,7 +13,7 @@ from .page_analysis import analyze_page
 Image.MAX_IMAGE_PIXELS = 24_000_000
 
 
-def decode_image(raw):
+def decode_image(raw, max_dimension=2000):
     try:
         with warnings.catch_warnings():
             warnings.simplefilter('error', Image.DecompressionBombWarning)
@@ -20,7 +21,7 @@ def decode_image(raw):
                 if source.width * source.height > Image.MAX_IMAGE_PIXELS:
                     raise ValueError('이미지는 2,400만 픽셀 이하로 선택해 주세요.')
                 rgb = ImageOps.exif_transpose(source).convert('RGB')
-                rgb.thumbnail((2000, 2000))
+                rgb.thumbnail((max_dimension, max_dimension))
                 return cv2.cvtColor(np.array(rgb), cv2.COLOR_RGB2BGR)
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError,
             Image.DecompressionBombWarning) as exc:
@@ -54,8 +55,11 @@ def rectify_document(image):
     return image, False
 
 
-def process(raw, *, rectify=True, mode='threshold', language='kor+eng', engine='tesseract'):
-    image = decode_image(raw)
+def process(raw, *, rectify=True, mode='threshold', language='kor+eng', engine='tesseract', psm=3, max_dimension=2000):
+    if psm not in (3, 6, 11) or max_dimension not in (2000, 2600, 3200):
+        raise ValueError('지원하지 않는 OCR 미세조정 값입니다.')
+    started = time.monotonic()
+    image = decode_image(raw, max_dimension)
     detected = False
     if rectify:
         image, detected = rectify_document(image)
@@ -69,7 +73,7 @@ def process(raw, *, rectify=True, mode='threshold', language='kor+eng', engine='
         from .vision_ocr import recognize
         data = recognize(image, language)
     else:
-        data = pytesseract.image_to_data(processed, lang=language, config='--psm 3', timeout=30, output_type=pytesseract.Output.DICT)
+        data = pytesseract.image_to_data(processed, lang=language, config=f'--psm {psm}', timeout=30, output_type=pytesseract.Output.DICT)
     rows = {}
     for i, word in enumerate(data['text']):
         if word.strip():
@@ -80,7 +84,8 @@ def process(raw, *, rectify=True, mode='threshold', language='kor+eng', engine='
     success, encoded = cv2.imencode('.png', processed)
     if not success:
         raise ValueError('처리 이미지를 생성하지 못했습니다.')
-    return {'engine': engine, 'text': text.strip(), 'page_analysis': page_analysis, 'document_detected': detected,
+    confidence = [float(value) for value in data.get('conf', []) if float(value) >= 0]
+    return {'diagnostics': {'seconds': round(time.monotonic() - started, 2), 'mean_confidence': round(sum(confidence)/len(confidence), 1) if confidence else 0, 'psm': psm if engine == 'tesseract' else None}, 'engine': engine, 'text': text.strip(), 'page_analysis': page_analysis, 'document_detected': detected,
             'rectify_requested': rectify, 'language': language, 'preprocessing': mode,
             'width': processed.shape[1], 'height': processed.shape[0],
             'preview': 'data:image/png;base64,' + base64.b64encode(encoded).decode('ascii')}

@@ -34,7 +34,7 @@ def create_app(test_config=None):
 
     @app.get('/')
     def index():
-        return render_template('index.html', camera_backend=app.config['CAMERA_BACKEND'], wiz_saved=(Path(app.instance_path) / 'wiz.json').exists(), both_saved=all((Path(app.instance_path) / name).exists() for name in ('wiz.json', 'hue.json')))
+        return render_template('index.html', camera_backend=app.config['CAMERA_BACKEND'], ocr_engine=app.config['OCR_ENGINE'], wiz_saved=(Path(app.instance_path) / 'wiz.json').exists(), both_saved=all((Path(app.instance_path) / name).exists() for name in ('wiz.json', 'hue.json')))
 
     @app.get('/api/health')
     def health():
@@ -57,7 +57,11 @@ def create_app(test_config=None):
         upload = request.files.get('image')
         if upload is None:
             return jsonify(error='이미지 파일을 선택해 주세요.'), 400
-        mode = request.form.get('mode', 'threshold')
+        mode = request.form.get('mode', 'gray' if app.config['OCR_ENGINE'] == 'tesseract' else 'threshold')
+        psm = request.form.get('psm', '3')
+        resolution = request.form.get('max_dimension', '2600' if app.config['OCR_ENGINE'] == 'tesseract' else '2000')
+        if psm not in ('3','6','11') or resolution not in ('2000','2600','3200'):
+            return jsonify(error='지원하지 않는 미세조정 설정입니다.'), 400
         language = request.form.get('language', 'kor+eng')
         if mode not in ('threshold', 'gray') or language not in ('kor+eng', 'eng', 'kor'):
             return jsonify(error='지원하지 않는 처리 설정입니다.'), 400
@@ -65,7 +69,7 @@ def create_app(test_config=None):
             return jsonify(error='다른 이미지를 처리 중입니다. 잠시 후 다시 시도해 주세요.'), 429
         try:
             result = process(upload.read(), rectify=request.form.get('rectify', 'true') == 'true',
-                             mode=mode, language=language, engine=app.config["OCR_ENGINE"])
+                             mode=mode, language=language, engine=app.config["OCR_ENGINE"], psm=int(psm), max_dimension=int(resolution))
             return jsonify(result)
         except ValueError as exc:
             return jsonify(error=str(exc)), 400

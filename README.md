@@ -42,3 +42,16 @@ RGB 순수 파랑을 사용하지 않습니다. 자동 적용은 각 조명의 �
 [상세 설치 안내](docs/RASPBERRY_PI_SETUP.md) · [로그인 없는 현장 실행 페이지](https://tobis-reading-light.tobislab0809.chatgpt.site)
 
 현장 실행 페이지는 해당 기기의 localhost 대시보드를 여는 링크입니다. 다른 컴퓨터에서 Pi를 원격 제어하는 기능은 없습니다.
+
+
+## 인식 미세조정 업데이트 (2026-09-18)
+
+USB 웹캠으로 사용하는 경우, 기존 서버를 Ctrl+C로 종료한 후:
+
+```bash
+cd ~/OCR-project
+git pull --ff-only
+bash scripts/start-raspberrypi.sh usb
+```
+
+카메라 모듈은 마지막 인자를 `module`로 바꾸세요. Chromium에서 새로고침하고 설정 → 인식 미세조정을 확인하세요. 회색조/2600px가 Tesseract의 새 기본값입니다. 글 배치(자동/한 문단/흩어진 글)와 해상도(2000/2600/3200px)를 비교하고, 최근 촬영 원본 저장 및 인식한 글 확인으로 원인을 점검할 수 있습니다. 해상도 변경 후 중지→시작하세요. 실제 Pi에서 인식률 향상은 아직 확인하지 않았습니다.

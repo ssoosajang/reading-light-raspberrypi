@@ -17,7 +17,7 @@ def create_pi_camera_blueprint(app):
         if not lock.acquire(blocking=False):
             return jsonify(error='카메라가 촬영 중입니다. 잠시 후 다시 시작해 주세요.'), 409
         try:
-            result = subprocess.run(['rpicam-still','--nopreview','--timeout','1200','--width','1920','--height','1080','--encoding','jpg','--output','-'],capture_output=True,timeout=10,check=True)
+            result = subprocess.run(['rpicam-still','--nopreview','--timeout','2200','--width','2592','--height','1944','--encoding','jpg','--output','-'],capture_output=True,timeout=10,check=True)
             if not result.stdout.startswith(b'\xff\xd8') or len(result.stdout) > 16*1024*1024:
                 return jsonify(error='카메라 이미지가 올바르지 않습니다.'), 503
             return Response(result.stdout, mimetype='image/jpeg')
